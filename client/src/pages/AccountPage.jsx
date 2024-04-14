@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/rules-of-hooks */
 import { useContext, useState } from "react";
-import { UserContext } from "../context/UserContext";
+import { UserContext } from "../UserContext";
 import { Link, Navigate, useParams } from "react-router-dom";
 import axios from "axios";
 
