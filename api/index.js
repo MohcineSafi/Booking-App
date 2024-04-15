@@ -4,8 +4,11 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const imageDownloader = require("image-downloader");
+const multer = require("multer");
 const User = require("./models/User.js");
+const Place = require("./models/Place.js");
 const { default: mongoose } = require("mongoose");
+const fs = require("fs");
 
 require("dotenv").config();
 const app = express();
@@ -104,5 +107,20 @@ app.post("/api/upload-by-link", async (req, res) => {
   );
   res.json(url);
 });
+
+const photosMiddleware = multer({ dest: "/tmp" });
+app.post(
+  "/api/upload",
+  photosMiddleware.array("photos", 100),
+  async (req, res) => {
+    const uploadedFiles = [];
+    for (let i = 0; i < req.files.length; i++) {
+      const { path, originalname, mimetype } = req.files[i];
+      const url = await uploadToS3(path, originalname, mimetype);
+      uploadedFiles.push(url);
+    }
+    res.json(uploadedFiles);
+  }
+);
 
 app.listen(4000);
