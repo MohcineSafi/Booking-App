@@ -1,21 +1,24 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
-const imageDownloader = require("image-downloader");
-const multer = require("multer");
 const User = require("./models/User.js");
 const Place = require("./models/Place.js");
 const Booking = require("./models/Booking.js");
-const { default: mongoose } = require("mongoose");
+const cookieParser = require("cookie-parser");
+const imageDownloader = require("image-downloader");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const multer = require("multer");
 const fs = require("fs");
+const mime = require("mime-types");
 
 require("dotenv").config();
 const app = express();
 
 const bcryptSalt = bcrypt.genSaltSync(10);
 const jwtSecret = "fasefraw4r5r3wq45wdfgw34twdfg";
+const bucket = "dawid-booking-app";
 
 app.use(express.json());
 app.use(cookieParser());
@@ -27,10 +30,41 @@ app.use(
   })
 );
 
-mongoose.connect(process.env.MONGO_URL);
+async function uploadToS3(path, originalFilename, mimetype) {
+  const client = new S3Client({
+    region: "us-east-1",
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY,
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    },
+  });
+  const parts = originalFilename.split(".");
+  const ext = parts[parts.length - 1];
+  const newFilename = Date.now() + "." + ext;
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Body: fs.readFileSync(path),
+      Key: newFilename,
+      ContentType: mimetype,
+      ACL: "public-read",
+    })
+  );
+  return `https://${bucket}.s3.amazonaws.com/${newFilename}`;
+}
 
-app.get("/", (req, res) => {
-  res.json("Hello World");
+function getUserDataFromReq(req) {
+  return new Promise((resolve, reject) => {
+    jwt.verify(req.cookies.token, jwtSecret, {}, async (err, userData) => {
+      if (err) throw err;
+      resolve(userData);
+    });
+  });
+}
+
+app.get("/api/test", (req, res) => {
+  mongoose.connect(process.env.MONGO_URL);
+  res.json("test ok");
 });
 
 app.post("/api/register", async (req, res) => {
@@ -237,6 +271,12 @@ app.post("/api/bookings", async (req, res) => {
     .catch((err) => {
       throw err;
     });
+});
+
+app.get("/api/bookings", async (req, res) => {
+  mongoose.connect(process.env.MONGO_URL);
+  const userData = await getUserDataFromReq(req);
+  res.json(await Booking.find({ user: userData.id }).populate("place"));
 });
 
 app.listen(4000);
